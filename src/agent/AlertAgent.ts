@@ -152,7 +152,69 @@ export async function generateAlert(
       }
     } catch (error) {
       console.error('Groq Alert Generation Failed:', error);
-      // Fall back to template if API fails
+    }
+  }
+
+  // Define default/fallback reasoning points
+  const expectedText = anomaly.missingEvents.length 
+    ? anomaly.missingEvents.join(', ').replace(/_/g, ' ') 
+    : 'normal routine activity';
+  const observedText = anomaly.observedEvents.length 
+    ? anomaly.observedEvents.join(', ').replace(/_/g, ' ') 
+    : 'silence';
+
+  let reasoning: string[] = [
+    `Anomaly detection score is ${anomaly.score.toFixed(1)}, reflecting a distinct routine deviation.`,
+    `Expected "${expectedText}" at this binned window, but microphone registered "${observedText}".`,
+    `Flagged immediately by Guardian's local acoustic Markov transition analyzer.`
+  ];
+
+  // Request secondary Chain-of-Thought reasoning explanation from LLM
+  if (finalApiKey) {
+    const reasoningPrompt = `You are Guardian, an AI safety agent. Explain why the following home safety alert was triggered.
+Analyze the expected baseline vs what was actually observed at this time.
+Write exactly 2 or 3 bullet points explaining the routine deviation (e.g. "occupant is usually awake and cooking at this hour, but complete silence was observed").
+Do not include any greeting, preamble, or markdown titles. Use simple dash "-" bullet points.
+
+Anomaly type: ${anomaly.anomalyType}
+Time: ${exactTime}
+Expected routine: ${expectedText}
+Observed sounds: ${observedText}
+KL Score: ${anomaly.score.toFixed(2)}`;
+
+    onNetworkLog({
+      timestamp: Date.now(),
+      url: 'https://api.groq.com/openai/v1/chat/completions#reasoning',
+      method: 'POST',
+      bodyPreview: `Reasoning request for anomaly: ${anomaly.anomalyType}`,
+      containsAudio: false
+    });
+
+    try {
+      const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${finalApiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          max_tokens: 120,
+          messages: [{ role: 'user', content: reasoningPrompt }],
+        }),
+      });
+      const respData = await resp.json();
+      if (respData.choices?.[0]?.message?.content) {
+        const text = respData.choices[0].message.content.trim();
+        const lines = text.split('\n')
+          .map((line: string) => line.replace(/^-\s*/, '').trim())
+          .filter(Boolean);
+        if (lines.length > 0) {
+          reasoning = lines.slice(0, 3);
+        }
+      }
+    } catch (e) {
+      console.error('Groq Reasoning Generation Failed:', e);
     }
   }
 
@@ -166,7 +228,7 @@ export async function generateAlert(
   // Fire browser notification if permission was granted
   if (Notification.permission === 'granted') {
     try {
-      new Notification('Guardian Alert', {
+      new Notification('Alert Triggered', {
         body: exactMessage,
         tag: 'guardian-alert',
       });
@@ -182,5 +244,6 @@ export async function generateAlert(
     anomaly,
     llmText,
     acknowledged: false,
+    reasoning,
   };
 }

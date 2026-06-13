@@ -23,6 +23,7 @@ const INITIAL_STATE: GuardianState = {
   modelStatus: 'loading',
   networkLog: [],
   klScore: 0,
+  checkInRequested: false,
 };
 
 type Action =
@@ -37,6 +38,7 @@ type Action =
   | { type: 'ADD_NETWORK_LOG'; payload: NetworkLogEntry }
   | { type: 'UPDATE_KL_SCORE'; payload: number }
   | { type: 'SET_MIC_SOURCE'; payload: MicSource }
+  | { type: 'SET_CHECK_IN_REQUESTED'; payload: boolean }
   | { type: 'RESET_STATE'; payload: any };
 
 function guardianReducer(state: GuardianState, action: Action): GuardianState {
@@ -80,6 +82,8 @@ function guardianReducer(state: GuardianState, action: Action): GuardianState {
       };
     }
     case 'UPDATE_MODEL': {
+      const dateStr = new Date().toISOString().split('T')[0];
+      localStorage.setItem(`guardian_model_${dateStr}`, exportModel(action.payload));
       localStorage.setItem('guardian_routine_model', exportModel(action.payload));
       return { ...state, routineModel: action.payload };
     }
@@ -87,6 +91,8 @@ function guardianReducer(state: GuardianState, action: Action): GuardianState {
       return { ...state, modelLoaded: action.payload };
     case 'SET_MODEL_STATUS':
       return { ...state, modelStatus: action.payload };
+    case 'SET_CHECK_IN_REQUESTED':
+      return { ...state, checkInRequested: action.payload };
     case 'ADD_NETWORK_LOG':
       return { ...state, networkLog: [action.payload, ...state.networkLog].slice(0, 50) };
     case 'UPDATE_KL_SCORE':
@@ -164,6 +170,9 @@ export function useGuardian() {
           if (msg.type === 'ALERT_ACKNOWLEDGED') {
             console.log('Received remote alert acknowledgement:', msg.payload);
             dispatch({ type: 'ACKNOWLEDGE_ALERT', payload: msg.payload });
+          } else if (msg.type === 'CHECK_IN_REQUESTED') {
+            console.log('Welfare check requested by caregiver!');
+            dispatch({ type: 'SET_CHECK_IN_REQUESTED', payload: true });
           }
         } catch (e) {
           console.error('Failed to parse WebSocket message on Monitor:', e);
@@ -229,6 +238,24 @@ export function useGuardian() {
       } catch (e) {
         console.warn('Failed to restore routine model:', e);
       }
+    }
+
+    // Ensure yesterday's snapshot exists for comparison view demos
+    const yesterdayDate = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    const yesterdayKey = `guardian_model_${yesterdayDate}`;
+    if (!localStorage.getItem(yesterdayKey)) {
+      const baseModel = savedModel ? importModel(savedModel) : createModel();
+      const modifiedCounts = new Float32Array(baseModel.counts);
+      // Introduce structural shifts to counts to simulate routine updates/adaptation
+      for (let i = 0; i < modifiedCounts.length; i += 37) {
+        modifiedCounts[i] = Math.max(1, modifiedCounts[i] + Math.sin(i) * 2.0);
+      }
+      const yesterdayModel = {
+        ...baseModel,
+        counts: modifiedCounts,
+        totalObservations: Math.max(50, baseModel.totalObservations - 12)
+      };
+      localStorage.setItem(yesterdayKey, exportModel(yesterdayModel));
     }
   }, []);
 
@@ -445,12 +472,23 @@ export function useGuardian() {
     return () => clearInterval(interval);
   }, [state.status, state.routineModel, state.recentEvents, addNetworkLog]);
 
+  // Respond to check in request
+  const respondToCheckIn = useCallback(() => {
+    dispatch({ type: 'SET_CHECK_IN_REQUESTED', payload: false });
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'CHECK_IN_RESPONDED'
+      }));
+    }
+  }, []);
+
   return {
     state,
     pairingCode,
     startMonitoring,
     stopMonitoring,
     acknowledgeAlert,
+    respondToCheckIn,
     injectDemoEvent,
     injectDemoSequence,
     seedPrior,

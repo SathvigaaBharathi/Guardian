@@ -32,6 +32,7 @@ export interface Alert {
   llmText: string;          // Generated natural language description
   acknowledged: boolean;
   acknowledgedAt?: number;
+  reasoning?: string[]; // Chain of thought bullet reasoning steps
 }
 
 export interface RoutineModelState {
@@ -60,4 +61,5 @@ export interface GuardianState {
   modelStatus?: 'loading' | 'loaded' | 'failed';
   networkLog: NetworkLogEntry[];    // live log of all outbound requests
   klScore: number;                  // current KL divergence score for live display
+  checkInRequested?: boolean;       // bidirectional welfare check status
 }
