@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { EVENT_CLASSES } from '../routine/MarkovRoutineModel';
+import { EVENT_CLASSES, importModel, getMarginalDist } from '../routine/MarkovRoutineModel';
 import { EVENT_ICONS } from '../constants';
 import { AudioEvent, HomeEventClass } from '../types';
 
@@ -16,6 +16,31 @@ export function RoutineHeatmap({ heatmapData, recentEvents }: RoutineHeatmapProp
   } | null>(null);
 
   const [activeCell, setActiveCell] = useState<{ bin: number; clsIdx: number } | null>(null);
+
+  const [isCompareActive, setIsCompareActive] = useState(false);
+  const [yesterdayData, setYesterdayData] = useState<number[][] | null>(null);
+
+  const handleToggleCompare = () => {
+    if (!isCompareActive && !yesterdayData) {
+      const yesterdayDate = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+      const yesterdayKey = `guardian_model_${yesterdayDate}`;
+      const savedModel = localStorage.getItem(yesterdayKey);
+      if (savedModel) {
+        try {
+          const restored = importModel(savedModel);
+          const data: number[][] = [];
+          for (let bin = 0; bin < 48; bin++) {
+            const dist = getMarginalDist(restored, bin);
+            data.push(Array.from(dist));
+          }
+          setYesterdayData(data);
+        } catch (e) {
+          console.warn('Failed to parse yesterday model snapshot:', e);
+        }
+      }
+    }
+    setIsCompareActive(!isCompareActive);
+  };
 
   const now = new Date();
   const currentBin = Math.floor((now.getHours() * 60 + now.getMinutes()) / 30);
@@ -34,8 +59,15 @@ export function RoutineHeatmap({ heatmapData, recentEvents }: RoutineHeatmapProp
     const icon = EVENT_ICONS[clsName] || '';
     const rect = (e.target as HTMLElement).getBoundingClientRect();
     
+    const yesterdayProb = isCompareActive && yesterdayData ? yesterdayData[bin]?.[clsIdx] || 0 : 0;
+    
+    let probText = `Prob = ${(prob * 100).toFixed(0)}%`;
+    if (isCompareActive && yesterdayData) {
+      probText = `Yesterday: ${(yesterdayProb * 100).toFixed(0)}% vs Today: ${(prob * 100).toFixed(0)}%`;
+    }
+
     setTooltip({
-      text: `${timeStr} · ${icon} ${clsName.replace('_', ' ')} · Prob = ${(prob * 100).toFixed(0)}% (Click to view confidence sparkline)`,
+      text: `${timeStr} · ${icon} ${clsName.replace('_', ' ')} · ${probText} (Click to view confidence sparkline)`,
       x: rect.left + window.scrollX + rect.width / 2,
       y: rect.top + window.scrollY - 32,
     });
@@ -173,9 +205,22 @@ export function RoutineHeatmap({ heatmapData, recentEvents }: RoutineHeatmapProp
             Markov probability matrix mapping expected household events against time of day. Click a cell to view confidence trends.
           </p>
         </div>
-        <span className="text-[10px] bg-teal-950/40 text-teal-400 border border-teal-900/30 px-2 py-0.5 rounded font-mono shrink-0">
-          Live Model States
-        </span>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={handleToggleCompare}
+            className={`text-[10px] border px-2.5 py-1 rounded font-mono font-medium transition-all ${
+              isCompareActive
+                ? 'bg-indigo-950/60 text-indigo-300 border-indigo-900/50 shadow-md shadow-indigo-950/30'
+                : 'bg-slate-950 hover:bg-slate-850 text-slate-400 border-slate-855/80 hover:text-slate-200'
+            }`}
+          >
+            {isCompareActive ? '✕ Close Comparison' : '⏳ Compare with Yesterday'}
+          </button>
+          <span className="text-[10px] bg-teal-955/40 text-teal-400 border border-teal-900/30 px-2 py-0.5 rounded font-mono shrink-0">
+            Live Model States
+          </span>
+        </div>
       </div>
 
       {/* Beginner Explanation Guide */}
@@ -197,18 +242,33 @@ export function RoutineHeatmap({ heatmapData, recentEvents }: RoutineHeatmapProp
       {/* Legend */}
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xxs font-mono text-slate-400 bg-slate-950/30 px-3 py-2 rounded-lg border border-slate-850/50">
         <span className="font-bold text-slate-500 uppercase tracking-wider text-[9px]">Legend:</span>
-        <div className="flex items-center gap-1.5">
-          <span className="w-3.5 h-3.5 rounded bg-slate-800/40 border border-transparent inline-block" />
-          <span>Silence / Inactive</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="w-3.5 h-3.5 rounded bg-teal-500/50 border border-transparent inline-block" />
-          <span>Expected Routine Sound</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="w-3.5 h-3.5 rounded bg-teal-500 border border-transparent inline-block shadow-md shadow-teal-500/20" />
-          <span>Highly Expected Sound</span>
-        </div>
+        {isCompareActive && yesterdayData ? (
+          <>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3.5 h-3.5 rounded bg-indigo-500 border border-transparent inline-block shadow-sm" />
+              <span className="text-indigo-400">Yesterday (Baseline)</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3.5 h-3.5 rounded bg-teal-500 border border-transparent inline-block shadow-sm" />
+              <span className="text-teal-400">Today (Adapted Model)</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3.5 h-3.5 rounded bg-slate-800/40 border border-transparent inline-block" />
+              <span>Silence / Inactive</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3.5 h-3.5 rounded bg-teal-500/50 border border-transparent inline-block" />
+              <span>Expected Routine Sound</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3.5 h-3.5 rounded bg-teal-500 border border-transparent inline-block shadow-md shadow-teal-500/20" />
+              <span>Highly Expected Sound</span>
+            </div>
+          </>
+        )}
         <div className="flex items-center gap-1.5">
           <span className="w-3.5 h-3.5 rounded border border-teal-400 bg-slate-950 inline-block animate-pulse" />
           <span>Current Time Window ({getHourLabel(currentBin)})</span>
@@ -260,23 +320,46 @@ export function RoutineHeatmap({ heatmapData, recentEvents }: RoutineHeatmapProp
                       const isCurrent = bin === currentBin;
                       const isActiveCell = activeCell && activeCell.bin === bin && activeCell.clsIdx === clsIdx;
 
+                      const isCompare = isCompareActive && yesterdayData;
+                      const yesterdayProb = isCompare ? yesterdayData![bin]?.[clsIdx] || 0 : 0;
+                      const yesterdayOpacity = Math.min(1, yesterdayProb * 5);
+
                       return (
                         <div
                           key={bin}
                           onMouseOver={(e) => handleCellMouseOver(e, bin, clsIdx, prob)}
                           onMouseOut={handleCellMouseOut}
                           onClick={() => handleCellClick(bin, clsIdx)}
-                          className={`h-4.5 rounded-sm transition-all relative cursor-pointer ${
+                          className={`h-4.5 rounded-sm transition-all relative cursor-pointer flex overflow-hidden ${
                             isCurrent 
                               ? 'border-2 border-teal-400 scale-y-110 z-10 shadow-lg shadow-teal-500/10' 
                               : isActiveCell
                               ? 'border-2 border-teal-300 scale-105 z-20 shadow-md ring-2 ring-teal-500/30'
                               : 'border border-transparent hover:border-slate-700'
                           }`}
-                          style={{
+                          style={!isCompare ? {
                             backgroundColor: opacity > 0.01 ? `rgba(20, 184, 166, ${opacity})` : 'rgba(30, 41, 59, 0.25)',
-                          }}
-                        />
+                          } : undefined}
+                        >
+                          {isCompare && (
+                            <>
+                              {/* Yesterday (Indigo) */}
+                              <div
+                                className="w-1/2 h-full"
+                                style={{
+                                  backgroundColor: yesterdayOpacity > 0.01 ? `rgba(99, 102, 241, ${yesterdayOpacity})` : 'rgba(30, 41, 59, 0.25)',
+                                }}
+                              />
+                              {/* Today (Teal) */}
+                              <div
+                                className="w-1/2 h-full border-l border-slate-900/30"
+                                style={{
+                                  backgroundColor: opacity > 0.01 ? `rgba(20, 184, 166, ${opacity})` : 'rgba(30, 41, 59, 0.25)',
+                                }}
+                              />
+                            </>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
