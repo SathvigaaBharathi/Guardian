@@ -20,6 +20,7 @@ const INITIAL_STATE: GuardianState = {
   alerts: [],
   routineModel: createModel(),
   modelLoaded: false,
+  modelStatus: 'loading',
   networkLog: [],
   klScore: 0,
 };
@@ -32,6 +33,7 @@ type Action =
   | { type: 'ACKNOWLEDGE_ALERT'; payload: string }
   | { type: 'UPDATE_MODEL'; payload: any }
   | { type: 'SET_MODEL_LOADED'; payload: boolean }
+  | { type: 'SET_MODEL_STATUS'; payload: 'loading' | 'loaded' | 'failed' }
   | { type: 'ADD_NETWORK_LOG'; payload: NetworkLogEntry }
   | { type: 'UPDATE_KL_SCORE'; payload: number }
   | { type: 'SET_MIC_SOURCE'; payload: MicSource }
@@ -83,6 +85,8 @@ function guardianReducer(state: GuardianState, action: Action): GuardianState {
     }
     case 'SET_MODEL_LOADED':
       return { ...state, modelLoaded: action.payload };
+    case 'SET_MODEL_STATUS':
+      return { ...state, modelStatus: action.payload };
     case 'ADD_NETWORK_LOG':
       return { ...state, networkLog: [action.payload, ...state.networkLog].slice(0, 50) };
     case 'UPDATE_KL_SCORE':
@@ -193,11 +197,15 @@ export function useGuardian() {
   useEffect(() => {
     async function initModel() {
       try {
+        dispatch({ type: 'SET_MODEL_STATUS', payload: 'loading' });
         const loadedModel = await loadYAMNet();
         modelRef.current = loadedModel;
         dispatch({ type: 'SET_MODEL_LOADED', payload: true });
+        dispatch({ type: 'SET_MODEL_STATUS', payload: 'loaded' });
       } catch (e) {
         console.error('Failed to load YAMNet model:', e);
+        dispatch({ type: 'SET_MODEL_LOADED', payload: false });
+        dispatch({ type: 'SET_MODEL_STATUS', payload: 'failed' });
       }
     }
     initModel();

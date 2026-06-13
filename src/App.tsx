@@ -48,11 +48,17 @@ export default function App() {
           <span>Ambient Audio Safety Agent · Audio stays on-device</span>
           <span className="w-1.5 h-1.5 rounded-full bg-slate-800" />
           <span className={`font-mono text-[10px] px-2 py-0.5 rounded border ${
-            guardian.state.modelLoaded 
+            guardian.state.modelStatus === 'loaded' 
               ? 'bg-teal-950/40 text-teal-400 border-teal-900/30' 
-              : 'bg-amber-950/40 text-amber-500 border-amber-900/30'
+              : guardian.state.modelStatus === 'loading'
+                ? 'bg-amber-950/20 text-amber-400 border-amber-900/30 animate-pulse'
+                : 'bg-rose-950/40 text-rose-455 border-rose-900/30'
           }`}>
-            {guardian.state.modelLoaded ? '🤖 YAMNet: Connected' : '⚠️ YAMNet: Simulated Mode'}
+            {guardian.state.modelStatus === 'loaded' 
+              ? '🤖 YAMNet: Connected' 
+              : guardian.state.modelStatus === 'loading'
+                ? '⏳ YAMNet: Loading...'
+                : '⚠️ YAMNet: Simulated Mode'}
           </span>
         </div>
         

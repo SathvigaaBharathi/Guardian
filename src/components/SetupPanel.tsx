@@ -120,7 +120,7 @@ export function SetupPanel({
       <div className="bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-2xl p-6 md:p-8 shadow-2xl space-y-8">
         
         {/* Model Status Warning (If offline/failed) */}
-        {!state.modelLoaded && (
+        {state.modelStatus === 'failed' && (
           <div className="bg-amber-950/20 border border-amber-900/30 rounded-xl p-4 text-xs text-slate-300 leading-relaxed space-y-2 animate-fadeIn">
             <h4 className="font-bold text-amber-500 flex items-center gap-1.5">
               ⚠️ YAMNet Model Loading Offline
@@ -130,6 +130,18 @@ export function SetupPanel({
             </p>
             <p className="text-xxs text-slate-400">
               You can still click <strong>Launch</strong>, watch the ambient timeline tick, and use the <strong>Demo Simulation Controls</strong> to inject sounds, train the Markov routine matrix, and test caregiver alert synchronization on your phone.
+            </p>
+          </div>
+        )}
+
+        {/* Model Loading Status Indicator */}
+        {state.modelStatus === 'loading' && (
+          <div className="bg-teal-950/20 border border-teal-900/30 rounded-xl p-4 text-xs text-slate-350 leading-relaxed space-y-2 animate-fadeIn">
+            <h4 className="font-bold text-teal-400 flex items-center gap-1.5 animate-pulse">
+              ⏳ Initializing YAMNet AI Model...
+            </h4>
+            <p>
+              Please wait while the neural network weights (~16MB) are loaded into your local browser memory. This runs fully on your device and never uploads data.
             </p>
           </div>
         )}

@@ -57,6 +57,7 @@ export interface GuardianState {
   alerts: Alert[];
   routineModel: RoutineModelState;
   modelLoaded: boolean;
+  modelStatus?: 'loading' | 'loaded' | 'failed';
   networkLog: NetworkLogEntry[];    // live log of all outbound requests
   klScore: number;                  // current KL divergence score for live display
 }
