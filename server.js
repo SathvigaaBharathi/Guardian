@@ -32,12 +32,24 @@ wss.on('connection', (ws) => {
   clients.add(ws);
 
   ws.on('message', (message) => {
-    const data = message.toString();
-    // Broadcast the message to all other connected clients (PC <=> phone sync)
-    for (const client of clients) {
-      if (client !== ws && client.readyState === 1) { // 1 = OPEN
-        client.send(data);
+    try {
+      const parsed = JSON.parse(message.toString());
+      if (parsed.type === 'JOIN_ROOM') {
+        ws.pairingCode = parsed.payload.pairingCode;
+        console.log(`Client joined room: ${ws.pairingCode}`);
+        return;
       }
+
+      // Broadcast the message to all other connected clients in the SAME room
+      if (ws.pairingCode) {
+        for (const client of clients) {
+          if (client !== ws && client.pairingCode === ws.pairingCode && client.readyState === 1) {
+            client.send(message.toString());
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error handling WebSocket message:', e);
     }
   });
 

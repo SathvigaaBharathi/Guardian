@@ -1,7 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Alert } from '../types';
 
+const getCodeFromUrl = () => {
+  // Check hash query param (e.g. #family?code=XYZ123)
+  const hash = window.location.hash;
+  const hashMatch = hash.match(/[?&]code=([A-Z0-9]+)/i);
+  if (hashMatch) return hashMatch[1].toUpperCase();
+
+  // Check standard query string (e.g. ?code=XYZ123#family)
+  const searchMatch = window.location.search.match(/[?&]code=([A-Z0-9]+)/i);
+  return searchMatch ? searchMatch[1].toUpperCase() : '';
+};
+
 export function FamilyAlertView() {
+  const [pairingCode, setPairingCode] = useState(() => {
+    const urlCode = getCodeFromUrl();
+    if (urlCode) {
+      localStorage.setItem('guardian_caregiver_pairing_code', urlCode);
+      return urlCode;
+    }
+    return localStorage.getItem('guardian_caregiver_pairing_code') || '';
+  });
+  const [inputCode, setInputCode] = useState('');
   const [alert, setAlert] = useState<Alert | null>(null);
   const [lastChecked, setLastChecked] = useState(Date.now());
   const wsRef = useRef<WebSocket | null>(null);
@@ -31,8 +51,10 @@ export function FamilyAlertView() {
     checkAlertState();
   }, []);
 
-  // Connect to local WebSocket for cross-device synchronization
+  // Connect to local WebSocket for cross-device synchronization (scoped by room pairing code)
   useEffect(() => {
+    if (!pairingCode) return;
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
     const wsUrl = `${protocol}//${host}/ws-sync`;
@@ -40,20 +62,28 @@ export function FamilyAlertView() {
     let reconnectTimeout: any;
 
     function connect() {
-      console.log('Connecting Caregiver view to sync WebSocket:', wsUrl);
+      console.log('Connecting Caregiver view to sync WebSocket:', wsUrl, 'Room:', pairingCode);
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log('Caregiver WebSocket open. Joining room:', pairingCode);
+        ws.send(JSON.stringify({
+          type: 'JOIN_ROOM',
+          payload: { pairingCode }
+        }));
+      };
 
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
           if (msg.type === 'ALERT_TRIGGERED') {
             const alertPayload = msg.payload;
-            console.log('Sync Alert Received:', alertPayload);
+            console.log('Sync Alert Received in Room:', alertPayload);
             localStorage.setItem('guardian_latest_alert', JSON.stringify(alertPayload));
             setAlert(alertPayload);
           } else if (msg.type === 'ALERT_ACKNOWLEDGED') {
-            console.log('Sync Alert Acknowledged by other client:', msg.payload);
+            console.log('Sync Alert Acknowledged in Room by other client:', msg.payload);
             const saved = localStorage.getItem('guardian_latest_alert');
             if (saved) {
               try {
@@ -88,7 +118,7 @@ export function FamilyAlertView() {
       if (wsRef.current) wsRef.current.close();
       clearTimeout(reconnectTimeout);
     };
-  }, []);
+  }, [pairingCode]);
 
   const handleMarkChecked = () => {
     if (alert) {
@@ -97,7 +127,7 @@ export function FamilyAlertView() {
       localStorage.setItem('guardian_latest_alert', JSON.stringify(updatedAlert));
       setAlert(null);
       
-      // Broadcast to other clients (the PC dashboard)
+      // Broadcast to other clients in the same room (the PC dashboard)
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.send(
           JSON.stringify({
@@ -109,10 +139,68 @@ export function FamilyAlertView() {
     }
   };
 
+  const handleDisconnect = () => {
+    if (confirm('Are you sure you want to unlink this caregiver device?')) {
+      localStorage.removeItem('guardian_caregiver_pairing_code');
+      setPairingCode('');
+      setAlert(null);
+      if (wsRef.current) wsRef.current.close();
+    }
+  };
+
+  const handleLink = () => {
+    const cleaned = inputCode.trim().toUpperCase();
+    if (cleaned.length === 6) {
+      localStorage.setItem('guardian_caregiver_pairing_code', cleaned);
+      setPairingCode(cleaned);
+    } else {
+      window.alert('Please enter a valid 6-character code.');
+    }
+  };
+
   const formatTime = (ts: number) => {
     const date = new Date(ts);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    // Show exact time including seconds
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   };
+
+  // Setup pairing screen if not paired
+  if (!pairingCode) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 font-sans">
+        <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl p-6 md:p-8 shadow-2xl space-y-6 text-center relative overflow-hidden">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-64 rounded-full blur-[80px] -z-10 bg-teal-500/10" />
+          
+          <div className="flex flex-col items-center gap-2 pb-2">
+            <span className="text-4xl">🛡️</span>
+            <span className="text-xl font-bold tracking-tight text-slate-200">Guardian Link</span>
+            <span className="text-xxs text-slate-500 font-medium uppercase tracking-wider">Pair Caregiver Device</span>
+          </div>
+
+          <div className="space-y-4">
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Enter the 6-character **Pairing Code** shown at the top of the main Guardian Monitor dashboard to link this phone.
+            </p>
+            <input
+              type="text"
+              placeholder="ENTER CODE"
+              value={inputCode}
+              onChange={(e) => setInputCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
+              className="w-full text-center tracking-widest text-lg font-mono font-bold bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl p-3 focus:outline-none text-teal-400"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={handleLink}
+            className="w-full py-3.5 bg-teal-650 hover:bg-teal-600 active:scale-95 text-white rounded-xl text-sm font-bold tracking-wide transition-all select-none border border-teal-500/20"
+          >
+            Link with Monitor
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 font-sans">
@@ -124,9 +212,22 @@ export function FamilyAlertView() {
         }`} />
 
         {/* Branding Header */}
-        <div className="flex flex-col items-center gap-1.5 pb-2">
-          <span className="text-xl font-bold tracking-tight text-slate-200">Guardian</span>
-          <span className="text-xxs text-slate-500 font-medium uppercase tracking-wider">Caregiver Mobile View</span>
+        <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
+          <div className="flex flex-col text-left">
+            <span className="text-lg font-bold tracking-tight text-slate-200">Guardian</span>
+            <span className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Caregiver view</span>
+          </div>
+          <div className="flex flex-col items-end gap-1">
+            <span className="text-[9px] bg-slate-950 px-2 py-0.5 rounded font-mono font-bold text-teal-400 border border-slate-800">
+              Room: {pairingCode}
+            </span>
+            <button
+              onClick={handleDisconnect}
+              className="text-[9px] text-rose-400 hover:underline hover:text-rose-300"
+            >
+              Unpair Device
+            </button>
+          </div>
         </div>
 
         {/* Dynamic Status Icon & Content */}

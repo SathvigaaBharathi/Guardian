@@ -102,6 +102,10 @@ export async function generateAlert(
 ): Promise<Alert> {
   const severity = getSeverity(anomaly);
   const timeStr = timeBinToString(anomaly.timeBin);
+  
+  // Capture exact local time (e.g. 03:43:10 PM)
+  const exactTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  
   const prompt = buildAlertPrompt({
     anomalyType: anomaly.anomalyType,
     timeStr,
@@ -109,9 +113,10 @@ export async function generateAlert(
     missingEvents: anomaly.missingEvents,
     observedEvents: anomaly.observedEvents,
     score: anomaly.score,
+    exactTime,
   });
 
-  let llmText = `Anomaly detected at ${timeStr} — please check in.`;
+  let llmText = `Anomaly detected at ${exactTime} — please check in.`;
 
   // Try UI-entered apiKey first, then fall back to Vite environment variable
   const finalApiKey = apiKey || (import.meta.env.VITE_GROQ_API_KEY as string) || '';
@@ -151,15 +156,18 @@ export async function generateAlert(
     }
   }
 
+  // Ensure exact time is prefixed in the sent messages
+  const exactMessage = `[🚨 Guardian Alert - ${exactTime}] ${llmText}`;
+
   // Fire external notifications (if SID/token keys are configured in .env)
-  sendTwilioSMS(llmText, onNetworkLog);
-  sendTwilioWhatsApp(llmText, onNetworkLog);
+  sendTwilioSMS(exactMessage, onNetworkLog);
+  sendTwilioWhatsApp(exactMessage, onNetworkLog);
 
   // Fire browser notification if permission was granted
   if (Notification.permission === 'granted') {
     try {
       new Notification('Guardian Alert', {
-        body: llmText,
+        body: exactMessage,
         tag: 'guardian-alert',
       });
     } catch (e) {

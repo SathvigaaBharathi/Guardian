@@ -25,12 +25,24 @@ const websocketSyncPlugin = {
       clients.add(ws);
 
       ws.on('message', (message: any) => {
-        const data = message.toString();
-        // Broadcast to all other connected clients
-        for (const client of clients) {
-          if (client !== ws && client.readyState === 1) { // 1 = OPEN
-            client.send(data);
+        try {
+          const parsed = JSON.parse(message.toString());
+          if (parsed.type === 'JOIN_ROOM') {
+            ws.pairingCode = parsed.payload.pairingCode;
+            console.log(`[Dev WS] Client joined room: ${ws.pairingCode}`);
+            return;
           }
+
+          // Broadcast to all other connected clients in the same room
+          if (ws.pairingCode) {
+            for (const client of clients) {
+              if (client !== ws && client.pairingCode === ws.pairingCode && client.readyState === 1) {
+                client.send(message.toString());
+              }
+            }
+          }
+        } catch (e) {
+          console.error('[Dev WS] Error handling message:', e);
         }
       });
 

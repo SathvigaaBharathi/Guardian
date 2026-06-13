@@ -1,4 +1,4 @@
-import { useReducer, useEffect, useRef, useCallback } from 'react';
+import { useReducer, useEffect, useRef, useCallback, useMemo } from 'react';
 import { GuardianState, AudioEvent, HomeEventClass, NetworkLogEntry, MicSource } from '../types';
 import { useAudioPipeline } from './useAudioPipeline';
 import { processFrame } from '../audio/FrameProcessor';
@@ -114,6 +114,16 @@ export function useGuardian() {
   const lastEventRef = useRef<AudioEvent | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
+  // Load or generate pairing code (cached in localStorage)
+  const pairingCode = useMemo(() => {
+    let code = localStorage.getItem('guardian_pairing_code');
+    if (!code) {
+      code = Math.random().toString(36).substring(2, 8).toUpperCase();
+      localStorage.setItem('guardian_pairing_code', code);
+    }
+    return code;
+  }, []);
+
   // Connect to local WebSocket for cross-device synchronization
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -126,6 +136,14 @@ export function useGuardian() {
       console.log('Connecting Monitor dashboard to sync WebSocket:', wsUrl);
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log('Monitor WebSocket connected. Sending room join for:', pairingCode);
+        ws.send(JSON.stringify({
+          type: 'JOIN_ROOM',
+          payload: { pairingCode }
+        }));
+      };
 
       ws.onmessage = (event) => {
         try {
@@ -155,7 +173,7 @@ export function useGuardian() {
       if (wsRef.current) wsRef.current.close();
       clearTimeout(reconnectTimeout);
     };
-  }, []);
+  }, [pairingCode]);
 
   // Broadcast new alerts when they appear in local state
   useEffect(() => {
@@ -411,6 +429,7 @@ export function useGuardian() {
 
   return {
     state,
+    pairingCode,
     startMonitoring,
     stopMonitoring,
     acknowledgeAlert,

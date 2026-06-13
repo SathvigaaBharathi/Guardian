@@ -18,7 +18,7 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  if (hash === '#family') {
+  if (hash.startsWith('#family')) {
     return <FamilyAlertView />;
   }
 
@@ -56,14 +56,19 @@ export default function App() {
           </span>
         </div>
         
-        <a
-          href="#family"
-          className="text-xs text-teal-400 hover:text-teal-300 underline ml-auto sm:ml-4 font-medium"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Family view →
-        </a>
+        <div className="flex items-center gap-3 ml-auto sm:ml-4">
+          <span className="text-[10px] bg-slate-900 text-slate-350 border border-slate-800 px-2.5 py-1 rounded font-mono font-bold flex items-center gap-1" title="Caregiver pairing code">
+            🔑 Code: <span className="text-teal-400 select-all font-extrabold">{guardian.pairingCode}</span>
+          </span>
+          <a
+            href={`#family?code=${guardian.pairingCode}`}
+            className="text-xs text-teal-400 hover:text-teal-300 underline font-medium"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Family view →
+          </a>
+        </div>
       </header>
 
       {/* Main Container */}
