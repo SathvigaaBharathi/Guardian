@@ -26,6 +26,33 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased">
+      {/* Welfare Check-In Requested Popup Modal */}
+      {guardian.state.checkInRequested && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 md:p-8 max-w-sm w-full text-center space-y-6 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 rounded-full blur-[60px] bg-rose-500/15 -z-10" />
+            
+            <div className="space-y-2">
+              <span className="text-4xl animate-bounce inline-block">🔔</span>
+              <h3 className="text-lg font-bold text-slate-100">Family is requesting a welfare check</h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Your family caregiver has requested a welfare check-in from their device to make sure you are safe.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={guardian.respondToCheckIn}
+                className="w-full py-3.5 bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 rounded-xl text-sm font-extrabold tracking-wide hover:brightness-110 active:scale-[0.99] transition-all select-none shadow-lg shadow-teal-500/10"
+              >
+                I am Safe (Dismiss Request)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top Header bar */}
       <header className="border-b border-slate-900 bg-slate-950 px-6 py-4 flex items-center gap-3">
         <div className={`w-2.5 h-2.5 rounded-full ${

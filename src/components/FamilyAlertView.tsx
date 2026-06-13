@@ -25,6 +25,22 @@ export function FamilyAlertView() {
   const [alert, setAlert] = useState<Alert | null>(null);
   const [lastChecked, setLastChecked] = useState(Date.now());
   const wsRef = useRef<WebSocket | null>(null);
+  const [checkInState, setCheckInState] = useState<'idle' | 'sending' | 'responded'>('idle');
+
+  const handleRequestCheckIn = () => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      setCheckInState('sending');
+      wsRef.current.send(JSON.stringify({
+        type: 'CHECK_IN_REQUESTED'
+      }));
+      // Auto fallback to idle after 25s if no answer
+      setTimeout(() => {
+        setCheckInState(prev => prev === 'sending' ? 'idle' : prev);
+      }, 25000);
+    } else {
+      window.alert('Connection is currently offline. Cannot request check-in.');
+    }
+  };
 
   const checkAlertState = () => {
     const saved = localStorage.getItem('guardian_latest_alert');
@@ -105,6 +121,10 @@ export function FamilyAlertView() {
             } else {
               setAlert(null);
             }
+          } else if (msg.type === 'CHECK_IN_RESPONDED') {
+            console.log('Sync Check-In Response Received: Safe');
+            setCheckInState('responded');
+            setTimeout(() => setCheckInState('idle'), 5000);
           }
         } catch (e) {
           console.error('Failed to parse sync message:', e);
@@ -253,6 +273,26 @@ export function FamilyAlertView() {
                 No routine anomalies or critical fall impacts have been detected.
               </p>
             </div>
+            
+            {/* Bidirectional Welfare Request Button */}
+            <button
+              type="button"
+              onClick={handleRequestCheckIn}
+              disabled={checkInState !== 'idle'}
+              className={`w-full py-2.5 rounded-xl text-xxs font-bold tracking-wide transition-all border shadow-sm select-none ${
+                checkInState === 'sending'
+                  ? 'bg-amber-950/20 border-amber-900/50 text-amber-400 animate-pulse cursor-default'
+                  : checkInState === 'responded'
+                  ? 'bg-emerald-950/40 border-emerald-900/40 text-emerald-400 cursor-default'
+                  : 'bg-slate-950 hover:bg-slate-900 border-slate-800 text-slate-300 hover:text-slate-100 active:scale-95'
+              }`}
+            >
+              {checkInState === 'sending'
+                ? '🔔 Requesting Welfare Check...'
+                : checkInState === 'responded'
+                ? '✓ Occupant Responded SAFE'
+                : '🔔 Request Welfare Check'}
+            </button>
           </div>
         ) : (
           <div className="space-y-6 py-4 flex flex-col items-center">

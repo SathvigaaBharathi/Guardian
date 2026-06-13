@@ -81,6 +81,23 @@ export function AlertPanel({ alerts, acknowledgeAlert }: AlertPanelProps) {
                     {alert.llmText}
                   </p>
 
+                  {/* Groq reasoning explanation */}
+                  {alert.reasoning && alert.reasoning.length > 0 && (
+                    <details className="mt-3 bg-slate-950/60 rounded-xl border border-slate-850 overflow-hidden text-xs">
+                      <summary className="bg-slate-950 px-3 py-2 cursor-pointer font-semibold text-slate-350 hover:text-slate-150 flex items-center justify-between select-none">
+                        <span className="flex items-center gap-1.5">💡 Why Guardian flagged this</span>
+                        <span className="text-[10px] text-slate-500 font-mono">Click to expand</span>
+                      </summary>
+                      <div className="p-3.5 space-y-2 border-t border-slate-900 bg-slate-950/30">
+                        <ul className="list-disc pl-4 space-y-2 text-slate-300 leading-relaxed">
+                          {alert.reasoning.map((step, idx) => (
+                            <li key={idx}>{step}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </details>
+                  )}
+
                   {/* Metadata row */}
                   <div className="text-xxs text-slate-400 flex flex-wrap gap-x-4 gap-y-1 font-mono pt-1">
                     <span>

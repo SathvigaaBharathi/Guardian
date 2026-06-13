@@ -11,6 +11,7 @@ interface AlertHistoryItem {
   acknowledgedAt?: number;
   acknowledgedBy?: string;
   description: string;
+  reasoning?: string[];
 }
 
 interface AlertHistoryTimelineProps {
@@ -46,7 +47,8 @@ export function AlertHistoryTimeline({ alerts }: AlertHistoryTimelineProps) {
           acknowledged: activeAlert.acknowledged,
           acknowledgedAt: activeAlert.acknowledgedAt,
           acknowledgedBy: activeAlert.acknowledged ? 'Local Monitor' : undefined,
-          description: activeAlert.llmText
+          description: activeAlert.llmText,
+          reasoning: activeAlert.reasoning
         });
         modified = true;
       } else {
@@ -171,6 +173,23 @@ export function AlertHistoryTimeline({ alerts }: AlertHistoryTimelineProps) {
                   <p className="text-xs text-slate-200 leading-relaxed font-medium">
                     {item.description}
                   </p>
+
+                  {/* Groq reasoning explanation */}
+                  {item.reasoning && item.reasoning.length > 0 && (
+                    <details className="mt-2 bg-slate-950/60 rounded-lg border border-slate-850 overflow-hidden text-[11px]">
+                      <summary className="bg-slate-950 px-2 py-1.5 cursor-pointer font-semibold text-slate-400 hover:text-slate-200 flex items-center justify-between select-none">
+                        <span className="flex items-center gap-1">💡 Why Guardian flagged this</span>
+                        <span className="text-[9px] text-slate-500 font-mono">Click to expand</span>
+                      </summary>
+                      <div className="p-2.5 space-y-1.5 border-t border-slate-900 bg-slate-950/30">
+                        <ul className="list-disc pl-4 space-y-1 text-slate-350 leading-relaxed">
+                          {item.reasoning.map((step, idx) => (
+                            <li key={idx}>{step}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </details>
+                  )}
 
                   {/* Acknowledgment Badge */}
                   <div className="border-t border-slate-900 pt-2 flex items-center justify-between text-[10px] font-mono">
