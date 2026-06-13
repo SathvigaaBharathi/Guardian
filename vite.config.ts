@@ -33,6 +33,11 @@ const websocketSyncPlugin = {
             return;
           }
 
+          if (parsed.type === 'PING') {
+            ws.send(JSON.stringify({ type: 'PONG' }));
+            return;
+          }
+
           // Broadcast to all other connected clients in the same room
           if (ws.pairingCode) {
             for (const client of clients) {

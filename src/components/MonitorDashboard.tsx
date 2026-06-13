@@ -5,6 +5,7 @@ import { RoutineHeatmap } from './RoutineHeatmap';
 import { AlertPanel } from './AlertPanel';
 import { AudioVisualizer } from './AudioVisualizer';
 import { useRoutineModel } from '../hooks/useRoutineModel';
+import { AlertHistoryTimeline } from './AlertHistoryTimeline';
 
 interface MonitorDashboardProps {
   state: GuardianState;
@@ -138,6 +139,9 @@ export function MonitorDashboard({
       {/* Alerts Panel */}
       <AlertPanel alerts={state.alerts} acknowledgeAlert={acknowledgeAlert} />
 
+      {/* Alert History Timeline (Incident Medical Record Ledger) */}
+      <AlertHistoryTimeline alerts={state.alerts} />
+
       {/* Events Ticker */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl space-y-3.5">
         <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-1.5 border-b border-slate-800 pb-2.5">
@@ -145,7 +149,7 @@ export function MonitorDashboard({
         </h3>
 
         {filteredTickerEvents.length === 0 ? (
-          <p className="text-xxs text-slate-550 italic py-4 text-center">
+          <p className="text-xxs text-slate-555 italic py-4 text-center">
             Awaiting sounds... captures occur every 1 second.
           </p>
         ) : (
@@ -170,7 +174,7 @@ export function MonitorDashboard({
                     }`}>
                       {event.eventClass.replace('_', ' ')}
                     </span>
-                    <span className="text-[10px] text-slate-500 shrink-0 font-mono">
+                    <span className="text-[10px] text-slate-550 shrink-0 font-mono">
                       (Conf: {(event.confidence * 100).toFixed(0)}%)
                     </span>
                   </div>
@@ -189,7 +193,7 @@ export function MonitorDashboard({
       </div>
 
       {/* Routine Heatmap */}
-      <RoutineHeatmap heatmapData={heatmapData} />
+      <RoutineHeatmap heatmapData={heatmapData} recentEvents={state.recentEvents} />
 
     </div>
   );

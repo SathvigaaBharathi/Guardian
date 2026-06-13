@@ -40,6 +40,11 @@ wss.on('connection', (ws) => {
         return;
       }
 
+      if (parsed.type === 'PING') {
+        ws.send(JSON.stringify({ type: 'PONG' }));
+        return;
+      }
+
       // Broadcast the message to all other connected clients in the SAME room
       if (ws.pairingCode) {
         for (const client of clients) {

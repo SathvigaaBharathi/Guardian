@@ -141,12 +141,21 @@ export function useGuardian() {
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
+      let pingInterval: any;
+
       ws.onopen = () => {
         console.log('Monitor WebSocket connected. Sending room join for:', pairingCode);
         ws.send(JSON.stringify({
           type: 'JOIN_ROOM',
           payload: { pairingCode }
         }));
+
+        // Start keepalive ping to prevent Render free-tier idle drops (kills idle after ~55s)
+        pingInterval = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'PING' }));
+          }
+        }, 30000);
       };
 
       ws.onmessage = (event) => {
@@ -162,6 +171,7 @@ export function useGuardian() {
       };
 
       ws.onclose = () => {
+        clearInterval(pingInterval);
         console.log('Monitor dashboard WebSocket disconnected. Retrying in 3s...');
         reconnectTimeout = setTimeout(connect, 3000);
       };
