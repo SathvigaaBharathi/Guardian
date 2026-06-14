@@ -1,25 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Alert } from '../types';
 
-const getCodeFromUrl = () => {
-  // Check hash query param (e.g. #family?code=XYZ123)
-  const hash = window.location.hash;
-  const hashMatch = hash.match(/[?&]code=([A-Z0-9]+)/i);
-  if (hashMatch) return hashMatch[1].toUpperCase();
-
-  // Check standard query string (e.g. ?code=XYZ123#family)
-  const searchMatch = window.location.search.match(/[?&]code=([A-Z0-9]+)/i);
-  return searchMatch ? searchMatch[1].toUpperCase() : '';
-};
-
 export function FamilyAlertView() {
   const [pairingCode, setPairingCode] = useState(() => {
-    const urlCode = getCodeFromUrl();
-    if (urlCode) {
-      localStorage.setItem('guardian_caregiver_pairing_code', urlCode);
-      return urlCode;
-    }
-    return localStorage.getItem('guardian_caregiver_pairing_code') || '';
+    return sessionStorage.getItem('guardian_caregiver_pairing_code') || '';
   });
   const [inputCode, setInputCode] = useState('');
   const [alert, setAlert] = useState<Alert | null>(null);
@@ -68,24 +52,7 @@ export function FamilyAlertView() {
     checkAlertState();
   }, [checkAlertState]);
 
-  // Listen to hash/search changes to dynamically update pairing code
-  useEffect(() => {
-    const handleUrlChange = () => {
-      const urlCode = getCodeFromUrl();
-      if (urlCode && urlCode !== pairingCode) {
-        localStorage.setItem('guardian_caregiver_pairing_code', urlCode);
-        setPairingCode(urlCode);
-      }
-    };
-
-    window.addEventListener('hashchange', handleUrlChange);
-    const interval = setInterval(handleUrlChange, 1000);
-
-    return () => {
-      window.removeEventListener('hashchange', handleUrlChange);
-      clearInterval(interval);
-    };
-  }, [pairingCode]);
+  // Code entry must be manual; URL polling is disabled.
 
   // Connect to local WebSocket for cross-device synchronization (scoped by room pairing code)
   useEffect(() => {
@@ -194,7 +161,7 @@ export function FamilyAlertView() {
 
   const handleDisconnect = () => {
     if (confirm('Are you sure you want to unlink this caregiver device?')) {
-      localStorage.removeItem('guardian_caregiver_pairing_code');
+      sessionStorage.removeItem('guardian_caregiver_pairing_code');
       setPairingCode('');
       setAlert(null);
       if (wsRef.current) wsRef.current.close();
@@ -204,7 +171,7 @@ export function FamilyAlertView() {
   const handleLink = () => {
     const cleaned = inputCode.trim().toUpperCase();
     if (cleaned.length === 6) {
-      localStorage.setItem('guardian_caregiver_pairing_code', cleaned);
+      sessionStorage.setItem('guardian_caregiver_pairing_code', cleaned);
       setPairingCode(cleaned);
     } else {
       window.alert('Please enter a valid 6-character code.');

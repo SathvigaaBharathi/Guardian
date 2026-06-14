@@ -134,7 +134,9 @@ export function useGuardian() {
 
   // Generate a new pairing code dynamically on every mount/load
   const pairingCode = useMemo(() => {
-    return Math.random().toString(36).substring(2, 8).toUpperCase();
+    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    localStorage.setItem('guardian_pairing_code', code);
+    return code;
   }, []);
 
   // Connect to local WebSocket for cross-device synchronization
