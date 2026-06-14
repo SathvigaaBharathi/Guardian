@@ -21,12 +21,26 @@ async function sendTwilioSMS(body: string, logger?: any) {
   const from = import.meta.env.VITE_TWILIO_FROM_NUMBER;
   const to = import.meta.env.VITE_TWILIO_TO_NUMBER;
 
-  if (!sid || !token || !from || !to) return;
+  const logId = `sms-${Date.now()}`;
+  if (!sid || !token || !from || !to) {
+    if (logger) {
+      logger.logRequest({
+        id: logId,
+        timestamp: Date.now(),
+        url: 'https://api.twilio.com/2010-04-01/Accounts/.../Messages.json',
+        method: 'POST',
+        bodyPreview: `To=[Hidden]&Body=${body.substring(0, 80)}`,
+        containsAudio: false,
+        status: 'failed',
+        responseSummary: 'Twilio SMS is disabled. Missing environment variables: VITE_TWILIO_ACCOUNT_SID, VITE_TWILIO_AUTH_TOKEN, VITE_TWILIO_FROM_NUMBER, or VITE_TWILIO_TO_NUMBER are not set in the build/deployment environment. Set these in your Render settings to enable SMS alerts.',
+      });
+    }
+    return;
+  }
 
   const url = `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`;
   const requestBody = new URLSearchParams({ To: to, From: from, Body: body }).toString();
 
-  const logId = `sms-${Date.now()}`;
   if (logger) {
     logger.logRequest({
       id: logId,
@@ -81,14 +95,28 @@ async function sendTwilioWhatsApp(body: string, logger?: any) {
   const from = import.meta.env.VITE_TWILIO_WHATSAPP_FROM || import.meta.env.VITE_TWILIO_FROM_NUMBER;
   const to = import.meta.env.VITE_TWILIO_WHATSAPP_TO || import.meta.env.VITE_TWILIO_TO_NUMBER;
 
-  if (!sid || !token || !from || !to) return;
+  const logId = `whatsapp-${Date.now()}`;
+  if (!sid || !token || !from || !to) {
+    if (logger) {
+      logger.logRequest({
+        id: logId,
+        timestamp: Date.now(),
+        url: 'https://api.twilio.com/2010-04-01/Accounts/.../Messages.json [WhatsApp]',
+        method: 'POST',
+        bodyPreview: `To=[Hidden]&Body=${body.substring(0, 80)}`,
+        containsAudio: false,
+        status: 'failed',
+        responseSummary: 'Twilio WhatsApp is disabled. Missing environment variables: VITE_TWILIO_ACCOUNT_SID, VITE_TWILIO_AUTH_TOKEN, VITE_TWILIO_WHATSAPP_FROM, or VITE_TWILIO_WHATSAPP_TO are not set in the build/deployment environment. Set these in your Render settings to enable WhatsApp alerts.',
+      });
+    }
+    return;
+  }
 
   const url = `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`;
   const formattedFrom = from.startsWith('whatsapp:') ? from : `whatsapp:${from}`;
   const formattedTo = to.startsWith('whatsapp:') ? to : `whatsapp:${to}`;
   const requestBody = new URLSearchParams({ To: formattedTo, From: formattedFrom, Body: body }).toString();
 
-  const logId = `whatsapp-${Date.now()}`;
   if (logger) {
     logger.logRequest({
       id: logId,
