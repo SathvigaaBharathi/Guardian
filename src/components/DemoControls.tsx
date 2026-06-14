@@ -5,12 +5,14 @@ interface DemoControlsProps {
   injectDemoEvent: (cls: HomeEventClass) => void;
   injectDemoSequence: (sequence: HomeEventClass[], bins: number[]) => void;
   resetModelToPrior: () => void;
+  runOneClickDemo: () => void;
 }
 
 export function DemoControls({
   injectDemoEvent,
   injectDemoSequence,
   resetModelToPrior,
+  runOneClickDemo,
 }: DemoControlsProps) {
   const [collapsed, setCollapsed] = useState(true);
 
@@ -65,6 +67,23 @@ export function DemoControls({
 
       {!collapsed && (
         <div className="space-y-6 pt-1">
+          {/* One-Click Automated Demo Mode */}
+          <div className="bg-slate-950/40 border border-teal-900/30 p-4 rounded-xl text-center space-y-3 shadow-inner">
+            <h4 className="text-xs font-bold text-teal-400 flex items-center justify-center gap-1.5">
+              🚀 Automated Demo Walkthrough
+            </h4>
+            <p className="text-xxs text-slate-400 max-w-[320px] mx-auto leading-relaxed">
+              Seeds model prior, logs typical breakfast activities, counts down 10 seconds, then registers unexpected morning silence. Anomaly triggers safety alert automatically.
+            </p>
+            <button
+              type="button"
+              onClick={runOneClickDemo}
+              className="bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 hover:brightness-110 active:scale-[0.98] px-5 py-2.5 rounded-xl text-xs font-extrabold tracking-wide transition-all shadow-md inline-block"
+            >
+              Start Automated Demo Mode
+            </button>
+          </div>
+
           {/* Single Event Injectors */}
           <div className="space-y-2">
             <h4 className="text-xxs font-semibold uppercase tracking-wider text-slate-400">

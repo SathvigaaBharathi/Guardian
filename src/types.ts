@@ -62,4 +62,6 @@ export interface GuardianState {
   networkLog: NetworkLogEntry[];    // live log of all outbound requests
   klScore: number;                  // current KL divergence score for live display
   checkInRequested?: boolean;       // bidirectional welfare check status
+  wsStatus?: 'connecting' | 'connected' | 'disconnected'; // WebSocket connection status
+  demoStatus?: string;              // Step-by-step one-click demo progress status
 }

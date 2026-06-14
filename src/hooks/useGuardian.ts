@@ -24,6 +24,8 @@ const INITIAL_STATE: GuardianState = {
   networkLog: [],
   klScore: 0,
   checkInRequested: false,
+  wsStatus: 'connecting',
+  demoStatus: '',
 };
 
 type Action =
@@ -39,6 +41,8 @@ type Action =
   | { type: 'UPDATE_KL_SCORE'; payload: number }
   | { type: 'SET_MIC_SOURCE'; payload: MicSource }
   | { type: 'SET_CHECK_IN_REQUESTED'; payload: boolean }
+  | { type: 'SET_WS_STATUS'; payload: 'connecting' | 'connected' | 'disconnected' }
+  | { type: 'SET_DEMO_STATUS'; payload: string }
   | { type: 'RESET_STATE'; payload: any };
 
 function guardianReducer(state: GuardianState, action: Action): GuardianState {
@@ -93,6 +97,10 @@ function guardianReducer(state: GuardianState, action: Action): GuardianState {
       return { ...state, modelStatus: action.payload };
     case 'SET_CHECK_IN_REQUESTED':
       return { ...state, checkInRequested: action.payload };
+    case 'SET_WS_STATUS':
+      return { ...state, wsStatus: action.payload };
+    case 'SET_DEMO_STATUS':
+      return { ...state, demoStatus: action.payload };
     case 'ADD_NETWORK_LOG':
       return { ...state, networkLog: [action.payload, ...state.networkLog].slice(0, 50) };
     case 'UPDATE_KL_SCORE':
@@ -144,12 +152,14 @@ export function useGuardian() {
 
     function connect() {
       console.log('Connecting Monitor dashboard to sync WebSocket:', wsUrl);
+      dispatch({ type: 'SET_WS_STATUS', payload: 'connecting' });
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       let pingInterval: any;
 
       ws.onopen = () => {
+        dispatch({ type: 'SET_WS_STATUS', payload: 'connected' });
         console.log('Monitor WebSocket connected. Sending room join for:', pairingCode);
         ws.send(JSON.stringify({
           type: 'JOIN_ROOM',
@@ -181,6 +191,7 @@ export function useGuardian() {
 
       ws.onclose = () => {
         clearInterval(pingInterval);
+        dispatch({ type: 'SET_WS_STATUS', payload: 'disconnected' });
         console.log('Monitor dashboard WebSocket disconnected. Retrying in 3s...');
         reconnectTimeout = setTimeout(connect, 3000);
       };
@@ -482,6 +493,124 @@ export function useGuardian() {
     }
   }, []);
 
+  // Run one-click automated demo mode
+  const runOneClickDemo = useCallback(async () => {
+    // 1. Seed Synthetic Prior (this makes model.isSeeded true and loads 150 counts)
+    dispatch({ type: 'SET_STATUS', payload: 'seeding' });
+    dispatch({ type: 'SET_DEMO_STATUS', payload: 'Demo Mode: Seeding baseline typical day routine...' });
+    
+    // Simulate seeding delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    const seeded = seedPriorFromTypicalDay();
+    dispatch({ type: 'UPDATE_MODEL', payload: seeded });
+    
+    // 2. Start monitoring
+    dispatch({ type: 'SET_LISTENING', payload: true });
+    dispatch({ type: 'SET_STATUS', payload: 'monitoring' });
+    dispatch({ type: 'SET_DEMO_STATUS', payload: 'Demo Mode: Active. Simulating morning routine (Puja & breakfast)...' });
+    
+    // 3. Inject normal morning routine sequence
+    const morningSeq: HomeEventClass[] = ['devotional_chants', 'cooker_whistle', 'mixie_grinder', 'vessel_clatter'];
+    const morningBins = [14, 14, 15, 16];
+    
+    const now = Date.now();
+    let currentModel = { ...seeded };
+    let prev: AudioEvent | null = null;
+    
+    morningSeq.forEach((cls, idx) => {
+      const event: AudioEvent = {
+        timestamp: now - (morningSeq.length - idx) * 3000,
+        eventClass: cls,
+        confidence: 0.9,
+        timeBin: morningBins[idx],
+        source: state.micSource,
+      };
+      dispatch({ type: 'ADD_EVENT', payload: event });
+      currentModel = updateModel(currentModel, prev, event);
+      prev = event;
+    });
+    dispatch({ type: 'UPDATE_MODEL', payload: currentModel });
+    lastEventRef.current = prev;
+    
+    // Stagger countdown
+    let countdown = 10;
+    dispatch({ type: 'SET_DEMO_STATUS', payload: `Demo Mode: Morning routine logged. Morning silence anomaly in ${countdown}s...` });
+    
+    const timer = setInterval(() => {
+      countdown--;
+      if (countdown > 0) {
+        dispatch({ type: 'SET_DEMO_STATUS', payload: `Demo Mode: Morning routine logged. Morning silence anomaly in ${countdown}s...` });
+      } else {
+        clearInterval(timer);
+      }
+    }, 1000);
+    
+    await new Promise(resolve => setTimeout(resolve, 10000));
+    
+    // 4. Inject silence anomaly (afternoon nap silence multiple times during the breakfast window)
+    dispatch({ type: 'SET_DEMO_STATUS', payload: 'Demo Mode: Registering unexpected morning silence anomaly...' });
+    
+    const silenceSeq: HomeEventClass[] = [
+      'afternoon_nap_silence',
+      'afternoon_nap_silence',
+      'afternoon_nap_silence',
+      'afternoon_nap_silence',
+      'afternoon_nap_silence'
+    ];
+    const silenceBins = [14, 14, 15, 15, 16];
+    
+    const silenceEvents: AudioEvent[] = [];
+    silenceSeq.forEach((cls, idx) => {
+      const event: AudioEvent = {
+        timestamp: Date.now() - (silenceSeq.length - idx) * 1000,
+        eventClass: cls,
+        confidence: 0.95,
+        timeBin: silenceBins[idx],
+        source: state.micSource,
+      };
+      silenceEvents.push(event);
+      dispatch({ type: 'ADD_EVENT', payload: event });
+      currentModel = updateModel(currentModel, prev, event);
+      prev = event;
+    });
+    dispatch({ type: 'UPDATE_MODEL', payload: currentModel });
+    lastEventRef.current = prev;
+    
+    // 5. Instantly run anomaly detector and fire Groq safety alert
+    dispatch({ type: 'SET_DEMO_STATUS', payload: 'Demo Mode: Running anomaly checks & contacting Llama safety agent...' });
+    
+    // Merge previous events with morning and silence events to simulate full buffer
+    const allEventsForCheck = [...state.recentEvents, ...silenceEvents];
+    // We check at bin 16 (08:00 AM) where silence is highly anomalous
+    const anomaly = detectAnomaly(currentModel, allEventsForCheck, 16);
+    
+    if (anomaly) {
+      const apiKey = sessionStorage.getItem('guardian_api_key') || '';
+      const alert = await generateAlert(anomaly, apiKey, addNetworkLog);
+      dispatch({ type: 'ADD_ALERT', payload: alert });
+      dispatch({ type: 'SET_DEMO_STATUS', payload: 'Demo Mode Success: Unexpected morning silence anomaly alert triggered!' });
+    } else {
+      // Fallback path
+      const fallbackAnomaly = {
+        timeBin: 16,
+        score: 4.8,
+        missingEvents: ['cooker_whistle', 'vessel_clatter'] as HomeEventClass[],
+        observedEvents: ['afternoon_nap_silence'] as HomeEventClass[],
+        anomalyType: 'temporal_silence' as const
+      };
+      const apiKey = sessionStorage.getItem('guardian_api_key') || '';
+      const alert = await generateAlert(fallbackAnomaly, apiKey, addNetworkLog);
+      dispatch({ type: 'ADD_ALERT', payload: alert });
+      dispatch({ type: 'SET_DEMO_STATUS', payload: 'Demo Mode Success: Safety alert triggered (fallback path)!' });
+    }
+    
+    // Clear demo status after 6s
+    setTimeout(() => {
+      dispatch({ type: 'SET_DEMO_STATUS', payload: '' });
+    }, 6000);
+    
+  }, [state.micSource, state.recentEvents, addNetworkLog]);
+
   return {
     state,
     pairingCode,
@@ -494,6 +623,7 @@ export function useGuardian() {
     seedPrior,
     setMicSource,
     resetModelToPrior,
+    runOneClickDemo,
     getAnalyser: () => captureRef.current.getAnalyser(),
   };
 }

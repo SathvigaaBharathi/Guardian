@@ -28,7 +28,7 @@ export default function App() {
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased">
       {/* Welfare Check-In Requested Popup Modal */}
       {guardian.state.checkInRequested && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-sm p-4 animate-fadeIn">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-sm p-4 animate-fadeIn print:hidden">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 md:p-8 max-w-sm w-full text-center space-y-6 shadow-2xl relative overflow-hidden">
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 rounded-full blur-[60px] bg-rose-500/15 -z-10" />
             
@@ -53,8 +53,37 @@ export default function App() {
         </div>
       )}
 
+      {/* Cold Start Connection Warning Banner */}
+      {guardian.state.wsStatus !== 'connected' && (
+        <div className="bg-amber-950/40 border-b border-amber-900/30 px-6 py-2 flex items-center justify-between text-xs text-amber-300 animate-fadeIn print:hidden">
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+            </span>
+            <span>⚡ Connecting to sync server... Render free tier takes 30-60s to wake up from sleep.</span>
+          </div>
+          <div className="flex items-center gap-2 font-mono text-[9px] text-amber-500">
+            <span>SOCKET_CONNECTING</span>
+          </div>
+        </div>
+      )}
+
+      {/* One-Click Demo Mode Progress Banner */}
+      {guardian.state.demoStatus && (
+        <div className="bg-teal-950/60 border-b border-teal-900/40 px-6 py-2.5 flex items-center justify-between text-xs text-teal-300 animate-fadeIn print:hidden">
+          <div className="flex items-center gap-2.5">
+            <span className="text-sm animate-bounce">🤖</span>
+            <span className="font-semibold">{guardian.state.demoStatus}</span>
+          </div>
+          <span className="text-[9px] bg-teal-900/40 text-teal-400 px-2 py-0.5 rounded border border-teal-900/30 font-mono uppercase animate-pulse">
+            Demo Mode Active
+          </span>
+        </div>
+      )}
+
       {/* Top Header bar */}
-      <header className="border-b border-slate-900 bg-slate-950 px-6 py-4 flex items-center gap-3">
+      <header className="border-b border-slate-900 bg-slate-950 px-6 py-4 flex items-center gap-3 print:hidden">
         <div className={`w-2.5 h-2.5 rounded-full ${
           guardian.state.status === 'alert' 
             ? 'bg-rose-500 pulse-ring-red' 
@@ -122,13 +151,18 @@ export default function App() {
           />
         )}
         
-        <PrivacyProof networkLog={guardian.state.networkLog} />
+        <div className="print:hidden">
+          <PrivacyProof networkLog={guardian.state.networkLog} />
+        </div>
         
-        <DemoControls
-          injectDemoEvent={guardian.injectDemoEvent}
-          injectDemoSequence={guardian.injectDemoSequence}
-          resetModelToPrior={guardian.resetModelToPrior}
-        />
+        <div className="print:hidden">
+          <DemoControls
+            injectDemoEvent={guardian.injectDemoEvent}
+            injectDemoSequence={guardian.injectDemoSequence}
+            resetModelToPrior={guardian.resetModelToPrior}
+            runOneClickDemo={guardian.runOneClickDemo}
+          />
+        </div>
       </main>
     </div>
   );
