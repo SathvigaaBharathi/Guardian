@@ -53,22 +53,52 @@ export function PrivacyProof({ networkLog }: PrivacyProofProps) {
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-900 pb-2">
                     <div className="flex items-center gap-2">
                       <span className="text-emerald-500 font-bold uppercase">{log.method}</span>
-                      <span className="text-slate-400 truncate max-w-[280px]" title={log.url}>
+                      <span className="text-slate-400 truncate max-w-[280px] text-xs font-bold" title={log.url}>
                         {log.url}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-slate-650">{formatTime(log.timestamp)}</span>
-                      <span className="bg-emerald-950 text-emerald-400 border border-emerald-900/40 px-2 py-0.5 rounded text-[9px] font-semibold">
-                        ✓ Text only — no audio data
+                      {log.status === 'pending' && (
+                        <span className="bg-amber-950/40 text-amber-400 border border-amber-900/30 px-2 py-0.5 rounded text-[9px] font-semibold animate-pulse">
+                          ⏳ Sending...
+                        </span>
+                      )}
+                      {log.status === 'success' && (
+                        <span className="bg-emerald-950/60 text-emerald-400 border border-emerald-900/40 px-2 py-0.5 rounded text-[9px] font-semibold">
+                          ✓ Success
+                        </span>
+                      )}
+                      {log.status === 'failed' && (
+                        <span className="bg-rose-950/60 text-rose-455 border border-rose-900/40 px-2 py-0.5 rounded text-[9px] font-semibold">
+                          ⚠️ Failed
+                        </span>
+                      )}
+                      <span className="bg-slate-900 text-slate-400 border border-slate-800 px-2 py-0.5 rounded text-[9px]">
+                        Text-only (No Audio)
                       </span>
                     </div>
                   </div>
-                  <div>
-                    <span className="text-slate-500 block text-[9px] mb-1 font-semibold uppercase">Request Body Preview:</span>
-                    <pre className="text-slate-300 bg-slate-900 p-2 rounded border border-slate-850/50 whitespace-pre-wrap overflow-x-auto text-[9px] leading-snug">
-                      {log.bodyPreview}...
-                    </pre>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <span className="text-slate-500 block text-[9px] mb-1 font-semibold uppercase">Request Body:</span>
+                      <pre className="text-slate-300 bg-slate-900 p-2 rounded border border-slate-850/50 whitespace-pre-wrap overflow-x-auto text-[9px] leading-snug">
+                        {log.bodyPreview}...
+                      </pre>
+                    </div>
+                    {log.responseSummary && (
+                      <div>
+                        <span className="text-slate-500 block text-[9px] mb-1 font-semibold uppercase">Response Result:</span>
+                        <pre className={`p-2 rounded border whitespace-pre-wrap overflow-x-auto text-[9px] leading-snug ${
+                          log.status === 'failed' 
+                            ? 'bg-rose-950/20 text-rose-400 border-rose-900/30' 
+                            : 'bg-slate-900 text-teal-400 border-slate-850/50'
+                        }`}>
+                          {log.responseSummary}
+                        </pre>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

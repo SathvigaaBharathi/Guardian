@@ -38,6 +38,7 @@ type Action =
   | { type: 'SET_MODEL_LOADED'; payload: boolean }
   | { type: 'SET_MODEL_STATUS'; payload: 'loading' | 'loaded' | 'failed' }
   | { type: 'ADD_NETWORK_LOG'; payload: NetworkLogEntry }
+  | { type: 'UPDATE_NETWORK_LOG_STATUS'; payload: { id: string; status: 'success' | 'failed'; responseSummary: string } }
   | { type: 'UPDATE_KL_SCORE'; payload: number }
   | { type: 'SET_MIC_SOURCE'; payload: MicSource }
   | { type: 'SET_CHECK_IN_REQUESTED'; payload: boolean }
@@ -103,6 +104,13 @@ function guardianReducer(state: GuardianState, action: Action): GuardianState {
       return { ...state, demoStatus: action.payload };
     case 'ADD_NETWORK_LOG':
       return { ...state, networkLog: [action.payload, ...state.networkLog].slice(0, 50) };
+    case 'UPDATE_NETWORK_LOG_STATUS': {
+      const { id, status, responseSummary } = action.payload;
+      const updatedLog = state.networkLog.map(log =>
+        log.id === id ? { ...log, status, responseSummary } : log
+      );
+      return { ...state, networkLog: updatedLog };
+    }
     case 'UPDATE_KL_SCORE':
       return { ...state, klScore: action.payload };
     case 'SET_MIC_SOURCE':
@@ -267,10 +275,15 @@ export function useGuardian() {
     }
   }, []);
 
-  // Helper to add network log entries
-  const addNetworkLog = useCallback((entry: NetworkLogEntry) => {
-    dispatch({ type: 'ADD_NETWORK_LOG', payload: entry });
-  }, []);
+  // Logger interface to post/update status of outgoing HTTP requests
+  const networkLogger = useMemo(() => ({
+    logRequest: (entry: NetworkLogEntry) => {
+      dispatch({ type: 'ADD_NETWORK_LOG', payload: entry });
+    },
+    updateStatus: (id: string, status: 'success' | 'failed', responseSummary: string) => {
+      dispatch({ type: 'UPDATE_NETWORK_LOG_STATUS', payload: { id, status, responseSummary } });
+    }
+  }), []);
 
   // Set microphone source
   const setMicSource = useCallback((source: MicSource) => {
@@ -357,12 +370,12 @@ export function useGuardian() {
       const apiKey = sessionStorage.getItem('guardian_api_key') || '';
       const anomaly = detectAnomaly(state.routineModel, [...state.recentEvents, event], timeBin);
       if (anomaly) {
-        generateAlert(anomaly, apiKey, addNetworkLog).then((alert) => {
+        generateAlert(anomaly, apiKey, networkLogger).then((alert) => {
           dispatch({ type: 'ADD_ALERT', payload: { ...alert, pairingCode } });
         });
       }
     }
-  }, [state.routineModel, state.recentEvents, state.micSource, addNetworkLog]);
+  }, [state.routineModel, state.recentEvents, state.micSource, networkLogger]);
 
   // Inject a demo sequence of events across timebins
   const injectDemoSequence = useCallback((sequence: HomeEventClass[], bins: number[]) => {
@@ -472,13 +485,13 @@ export function useGuardian() {
       const anomaly = detectAnomaly(state.routineModel, state.recentEvents, timeBin);
       if (anomaly) {
         const apiKey = sessionStorage.getItem('guardian_api_key') || '';
-        const alert = await generateAlert(anomaly, apiKey, addNetworkLog);
+        const alert = await generateAlert(anomaly, apiKey, networkLogger);
         dispatch({ type: 'ADD_ALERT', payload: { ...alert, pairingCode } });
       }
     }, ANOMALY_CHECK_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, [state.status, state.routineModel, state.recentEvents, addNetworkLog]);
+  }, [state.status, state.routineModel, state.recentEvents, networkLogger]);
 
   // Respond to check in request
   const respondToCheckIn = useCallback(() => {
@@ -583,7 +596,7 @@ export function useGuardian() {
     
     if (anomaly) {
       const apiKey = sessionStorage.getItem('guardian_api_key') || '';
-      const alert = await generateAlert(anomaly, apiKey, addNetworkLog);
+      const alert = await generateAlert(anomaly, apiKey, networkLogger);
       dispatch({ type: 'ADD_ALERT', payload: { ...alert, pairingCode } });
       dispatch({ type: 'SET_DEMO_STATUS', payload: 'Demo Mode Success: Unexpected morning silence anomaly alert triggered!' });
     } else {
@@ -596,7 +609,7 @@ export function useGuardian() {
         anomalyType: 'temporal_silence' as const
       };
       const apiKey = sessionStorage.getItem('guardian_api_key') || '';
-      const alert = await generateAlert(fallbackAnomaly, apiKey, addNetworkLog);
+      const alert = await generateAlert(fallbackAnomaly, apiKey, networkLogger);
       dispatch({ type: 'ADD_ALERT', payload: { ...alert, pairingCode } });
       dispatch({ type: 'SET_DEMO_STATUS', payload: 'Demo Mode Success: Safety alert triggered (fallback path)!' });
     }
@@ -606,7 +619,7 @@ export function useGuardian() {
       dispatch({ type: 'SET_DEMO_STATUS', payload: '' });
     }, 6000);
     
-  }, [state.micSource, state.recentEvents, addNetworkLog]);
+  }, [state.micSource, state.recentEvents, networkLogger]);
 
   return {
     state,

@@ -15,7 +15,7 @@ function timeBinToString(bin: number): string {
   return `${h}:${m}`;
 }
 
-async function sendTwilioSMS(body: string, onNetworkLog: (entry: NetworkLogEntry) => void) {
+async function sendTwilioSMS(body: string, logger?: any) {
   const sid = import.meta.env.VITE_TWILIO_ACCOUNT_SID;
   const token = import.meta.env.VITE_TWILIO_AUTH_TOKEN;
   const from = import.meta.env.VITE_TWILIO_FROM_NUMBER;
@@ -26,14 +26,18 @@ async function sendTwilioSMS(body: string, onNetworkLog: (entry: NetworkLogEntry
   const url = `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`;
   const requestBody = new URLSearchParams({ To: to, From: from, Body: body }).toString();
 
-  // Log to PrivacyProof - proves text metadata only (no audio)
-  onNetworkLog({
-    timestamp: Date.now(),
-    url,
-    method: 'POST',
-    bodyPreview: `To=${to}&Body=${body.substring(0, 80)}`,
-    containsAudio: false,
-  });
+  const logId = `sms-${Date.now()}`;
+  if (logger) {
+    logger.logRequest({
+      id: logId,
+      timestamp: Date.now(),
+      url,
+      method: 'POST',
+      bodyPreview: `To=${to}&Body=${body.substring(0, 80)}`,
+      containsAudio: false,
+      status: 'pending',
+    });
+  }
 
   try {
     const response = await fetch(url, {
@@ -46,15 +50,32 @@ async function sendTwilioSMS(body: string, onNetworkLog: (entry: NetworkLogEntry
     });
     if (response.ok) {
       console.log('Twilio SMS sent successfully!');
+      if (logger) {
+        logger.updateStatus(logId, 'success', '201 Created (SMS sent successfully)');
+      }
     } else {
-      console.error('Twilio SMS response error:', await response.text());
+      const errorText = await response.text();
+      console.error('Twilio SMS response error:', errorText);
+      if (logger) {
+        let summary = `Error ${response.status}`;
+        try {
+          const parsed = JSON.parse(errorText);
+          if (parsed.message) summary += `: ${parsed.message} (Code: ${parsed.code || ''})`;
+        } catch(e) {
+          summary += `: ${errorText.substring(0, 80)}`;
+        }
+        logger.updateStatus(logId, 'failed', summary);
+      }
     }
-  } catch (e) {
+  } catch (e: any) {
     console.error('Failed to send Twilio SMS:', e);
+    if (logger) {
+      logger.updateStatus(logId, 'failed', e.message || String(e));
+    }
   }
 }
 
-async function sendTwilioWhatsApp(body: string, onNetworkLog: (entry: NetworkLogEntry) => void) {
+async function sendTwilioWhatsApp(body: string, logger?: any) {
   const sid = import.meta.env.VITE_TWILIO_ACCOUNT_SID;
   const token = import.meta.env.VITE_TWILIO_AUTH_TOKEN;
   const from = import.meta.env.VITE_TWILIO_WHATSAPP_FROM || import.meta.env.VITE_TWILIO_FROM_NUMBER;
@@ -67,14 +88,18 @@ async function sendTwilioWhatsApp(body: string, onNetworkLog: (entry: NetworkLog
   const formattedTo = to.startsWith('whatsapp:') ? to : `whatsapp:${to}`;
   const requestBody = new URLSearchParams({ To: formattedTo, From: formattedFrom, Body: body }).toString();
 
-  // Log to PrivacyProof - proves text metadata only (no audio)
-  onNetworkLog({
-    timestamp: Date.now(),
-    url,
-    method: 'POST',
-    bodyPreview: `To=${formattedTo}&Body=${body.substring(0, 80)}`,
-    containsAudio: false,
-  });
+  const logId = `whatsapp-${Date.now()}`;
+  if (logger) {
+    logger.logRequest({
+      id: logId,
+      timestamp: Date.now(),
+      url,
+      method: 'POST',
+      bodyPreview: `To=${formattedTo}&Body=${body.substring(0, 80)}`,
+      containsAudio: false,
+      status: 'pending',
+    });
+  }
 
   try {
     const response = await fetch(url, {
@@ -87,18 +112,35 @@ async function sendTwilioWhatsApp(body: string, onNetworkLog: (entry: NetworkLog
     });
     if (response.ok) {
       console.log('Twilio WhatsApp sent successfully!');
+      if (logger) {
+        logger.updateStatus(logId, 'success', '201 Created (WhatsApp sent successfully)');
+      }
     } else {
-      console.error('Twilio WhatsApp response error:', await response.text());
+      const errorText = await response.text();
+      console.error('Twilio WhatsApp response error:', errorText);
+      if (logger) {
+        let summary = `Error ${response.status}`;
+        try {
+          const parsed = JSON.parse(errorText);
+          if (parsed.message) summary += `: ${parsed.message} (Code: ${parsed.code || ''})`;
+        } catch(e) {
+          summary += `: ${errorText.substring(0, 80)}`;
+        }
+        logger.updateStatus(logId, 'failed', summary);
+      }
     }
-  } catch (e) {
+  } catch (e: any) {
     console.error('Failed to send Twilio WhatsApp:', e);
+    if (logger) {
+      logger.updateStatus(logId, 'failed', e.message || String(e));
+    }
   }
 }
 
 export async function generateAlert(
   anomaly: Anomaly,
   apiKey: string,
-  onNetworkLog: (entry: NetworkLogEntry) => void
+  logger?: any
 ): Promise<Alert> {
   const severity = getSeverity(anomaly);
   const timeStr = timeBinToString(anomaly.timeBin);
@@ -128,14 +170,18 @@ export async function generateAlert(
       messages: [{ role: 'user', content: prompt }],
     });
 
-    // Log this request for the PrivacyProof component — proves no audio in body
-    onNetworkLog({
-      timestamp: Date.now(),
-      url: 'https://api.groq.com/openai/v1/chat/completions',
-      method: 'POST',
-      bodyPreview: requestBody.substring(0, 120),
-      containsAudio: false, // always false — body is text only
-    });
+    const groqLogId = `groq-completions-${Date.now()}`;
+    if (logger) {
+      logger.logRequest({
+        id: groqLogId,
+        timestamp: Date.now(),
+        url: 'https://api.groq.com/openai/v1/chat/completions',
+        method: 'POST',
+        bodyPreview: requestBody.substring(0, 120),
+        containsAudio: false,
+        status: 'pending',
+      });
+    }
 
     try {
       const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -149,9 +195,19 @@ export async function generateAlert(
       const data = await response.json();
       if (data.choices?.[0]?.message?.content) {
         llmText = data.choices[0].message.content.trim();
+        if (logger) {
+          logger.updateStatus(groqLogId, 'success', '200 OK (Groq alert generated)');
+        }
+      } else {
+        if (logger) {
+          logger.updateStatus(groqLogId, 'failed', `Error: Invalid choices. Status: ${response.status}`);
+        }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Groq Alert Generation Failed:', error);
+      if (logger) {
+        logger.updateStatus(groqLogId, 'failed', error.message || String(error));
+      }
     }
   }
 
@@ -182,13 +238,18 @@ Expected routine: ${expectedText}
 Observed sounds: ${observedText}
 KL Score: ${anomaly.score.toFixed(2)}`;
 
-    onNetworkLog({
-      timestamp: Date.now(),
-      url: 'https://api.groq.com/openai/v1/chat/completions#reasoning',
-      method: 'POST',
-      bodyPreview: `Reasoning request for anomaly: ${anomaly.anomalyType}`,
-      containsAudio: false
-    });
+    const reasoningLogId = `groq-reasoning-${Date.now()}`;
+    if (logger) {
+      logger.logRequest({
+        id: reasoningLogId,
+        timestamp: Date.now(),
+        url: 'https://api.groq.com/openai/v1/chat/completions#reasoning',
+        method: 'POST',
+        bodyPreview: `Reasoning request for anomaly: ${anomaly.anomalyType}`,
+        containsAudio: false,
+        status: 'pending',
+      });
+    }
 
     try {
       const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -212,9 +273,19 @@ KL Score: ${anomaly.score.toFixed(2)}`;
         if (lines.length > 0) {
           reasoning = lines.slice(0, 3);
         }
+        if (logger) {
+          logger.updateStatus(reasoningLogId, 'success', '200 OK (Reasoning bullets generated)');
+        }
+      } else {
+        if (logger) {
+          logger.updateStatus(reasoningLogId, 'failed', `Error: Invalid choices. Status: ${resp.status}`);
+        }
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('Groq Reasoning Generation Failed:', e);
+      if (logger) {
+        logger.updateStatus(reasoningLogId, 'failed', e.message || String(e));
+      }
     }
   }
 
@@ -222,8 +293,8 @@ KL Score: ${anomaly.score.toFixed(2)}`;
   const exactMessage = `[🚨 Guardian Alert - ${exactTime}] ${llmText}`;
 
   // Fire external notifications (if SID/token keys are configured in .env)
-  sendTwilioSMS(exactMessage, onNetworkLog);
-  sendTwilioWhatsApp(exactMessage, onNetworkLog);
+  sendTwilioSMS(exactMessage, logger);
+  sendTwilioWhatsApp(exactMessage, logger);
 
   // Fire browser notification if permission was granted
   if (Notification.permission === 'granted') {

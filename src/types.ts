@@ -44,11 +44,14 @@ export interface RoutineModelState {
 }
 
 export interface NetworkLogEntry {
+  id: string;               // Unique ID to allow in-place updates of log statuses
   timestamp: number;
   url: string;
   method: string;
   bodyPreview: string;      // first 120 chars of request body — proves no audio
   containsAudio: boolean;   // always false — used to prove privacy claim
+  status?: 'pending' | 'success' | 'failed';
+  responseSummary?: string; // Summary of response (e.g., status code, error message)
 }
 
 export interface GuardianState {
