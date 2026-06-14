@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Alert } from '../types';
 
 const getCodeFromUrl = () => {
@@ -43,13 +43,13 @@ export function FamilyAlertView() {
     }
   };
 
-  const checkAlertState = () => {
+  const checkAlertState = useCallback(() => {
     const saved = localStorage.getItem('guardian_latest_alert');
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as Alert;
-        // Only show if not acknowledged yet
-        if (!parsed.acknowledged) {
+        // Verify room code match to avoid same-browser localStorage cross-contamination!
+        if (!parsed.acknowledged && (!parsed.pairingCode || parsed.pairingCode === pairingCode)) {
           setAlert(parsed);
         } else {
           setAlert(null);
@@ -61,12 +61,31 @@ export function FamilyAlertView() {
       setAlert(null);
     }
     setLastChecked(Date.now());
-  };
+  }, [pairingCode]);
 
   // Pull local state on mount
   useEffect(() => {
     checkAlertState();
-  }, []);
+  }, [checkAlertState]);
+
+  // Listen to hash/search changes to dynamically update pairing code
+  useEffect(() => {
+    const handleUrlChange = () => {
+      const urlCode = getCodeFromUrl();
+      if (urlCode && urlCode !== pairingCode) {
+        localStorage.setItem('guardian_caregiver_pairing_code', urlCode);
+        setPairingCode(urlCode);
+      }
+    };
+
+    window.addEventListener('hashchange', handleUrlChange);
+    const interval = setInterval(handleUrlChange, 1000);
+
+    return () => {
+      window.removeEventListener('hashchange', handleUrlChange);
+      clearInterval(interval);
+    };
+  }, [pairingCode]);
 
   // Connect to local WebSocket for cross-device synchronization (scoped by room pairing code)
   useEffect(() => {

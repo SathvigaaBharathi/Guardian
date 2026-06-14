@@ -33,6 +33,7 @@ export interface Alert {
   acknowledged: boolean;
   acknowledgedAt?: number;
   reasoning?: string[]; // Chain of thought bullet reasoning steps
+  pairingCode?: string; // Room code mapping to isolate alerts in shared storage
 }
 
 export interface RoutineModelState {

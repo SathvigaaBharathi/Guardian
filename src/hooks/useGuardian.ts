@@ -361,7 +361,7 @@ export function useGuardian() {
       const anomaly = detectAnomaly(state.routineModel, [...state.recentEvents, event], timeBin);
       if (anomaly) {
         generateAlert(anomaly, apiKey, addNetworkLog).then((alert) => {
-          dispatch({ type: 'ADD_ALERT', payload: alert });
+          dispatch({ type: 'ADD_ALERT', payload: { ...alert, pairingCode } });
         });
       }
     }
@@ -476,7 +476,7 @@ export function useGuardian() {
       if (anomaly) {
         const apiKey = sessionStorage.getItem('guardian_api_key') || '';
         const alert = await generateAlert(anomaly, apiKey, addNetworkLog);
-        dispatch({ type: 'ADD_ALERT', payload: alert });
+        dispatch({ type: 'ADD_ALERT', payload: { ...alert, pairingCode } });
       }
     }, ANOMALY_CHECK_INTERVAL_MS);
 
@@ -587,7 +587,7 @@ export function useGuardian() {
     if (anomaly) {
       const apiKey = sessionStorage.getItem('guardian_api_key') || '';
       const alert = await generateAlert(anomaly, apiKey, addNetworkLog);
-      dispatch({ type: 'ADD_ALERT', payload: alert });
+      dispatch({ type: 'ADD_ALERT', payload: { ...alert, pairingCode } });
       dispatch({ type: 'SET_DEMO_STATUS', payload: 'Demo Mode Success: Unexpected morning silence anomaly alert triggered!' });
     } else {
       // Fallback path
@@ -600,7 +600,7 @@ export function useGuardian() {
       };
       const apiKey = sessionStorage.getItem('guardian_api_key') || '';
       const alert = await generateAlert(fallbackAnomaly, apiKey, addNetworkLog);
-      dispatch({ type: 'ADD_ALERT', payload: alert });
+      dispatch({ type: 'ADD_ALERT', payload: { ...alert, pairingCode } });
       dispatch({ type: 'SET_DEMO_STATUS', payload: 'Demo Mode Success: Safety alert triggered (fallback path)!' });
     }
     
