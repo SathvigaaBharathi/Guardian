@@ -26,6 +26,7 @@ export function FamilyAlertView() {
   const [lastChecked, setLastChecked] = useState(Date.now());
   const wsRef = useRef<WebSocket | null>(null);
   const [checkInState, setCheckInState] = useState<'idle' | 'sending' | 'responded'>('idle');
+  const [wsStatus, setWsStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
 
   const handleRequestCheckIn = () => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -79,12 +80,14 @@ export function FamilyAlertView() {
 
     function connect() {
       console.log('Connecting Caregiver view to sync WebSocket:', wsUrl, 'Room:', pairingCode);
+      setWsStatus('connecting');
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       let pingInterval: any;
 
       ws.onopen = () => {
+        setWsStatus('connected');
         console.log('Caregiver WebSocket open. Joining room:', pairingCode);
         ws.send(JSON.stringify({
           type: 'JOIN_ROOM',
@@ -133,6 +136,7 @@ export function FamilyAlertView() {
 
       ws.onclose = () => {
         clearInterval(pingInterval);
+        setWsStatus('disconnected');
         console.log('Caregiver view WebSocket disconnected. Retrying in 3s...');
         reconnectTimeout = setTimeout(connect, 3000);
       };
@@ -233,7 +237,23 @@ export function FamilyAlertView() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 font-sans">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 font-sans relative">
+      {/* Cold Start Connection Warning Banner */}
+      {wsStatus !== 'connected' && (
+        <div className="absolute top-0 left-0 right-0 bg-amber-950/40 border-b border-amber-900/30 px-6 py-2 flex items-center justify-between text-xs text-amber-300 animate-fadeIn">
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+            </span>
+            <span>⚡ Connecting sync server... Render takes 30-60s to wake up.</span>
+          </div>
+          <div className="hidden sm:flex items-center gap-2 font-mono text-[9px] text-amber-550">
+            <span>SOCKET_CONNECTING</span>
+          </div>
+        </div>
+      )}
+
       <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-8 text-center relative overflow-hidden">
         
         {/* Glow Effects */}

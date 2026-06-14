@@ -6,6 +6,7 @@ import { AlertPanel } from './AlertPanel';
 import { AudioVisualizer } from './AudioVisualizer';
 import { useRoutineModel } from '../hooks/useRoutineModel';
 import { AlertHistoryTimeline } from './AlertHistoryTimeline';
+import { EVENT_CLASSES, getMarginalDist } from '../routine/MarkovRoutineModel';
 
 interface MonitorDashboardProps {
   state: GuardianState;
@@ -26,6 +27,54 @@ export function MonitorDashboard({
   // Compute stat card figures
   const eventsCount = state.recentEvents.length;
   const activeAlertsCount = state.alerts.filter(a => !a.acknowledged).length;
+
+  // Insights calculations
+  const daysOfData = useMemo(() => {
+    const keys = Object.keys(localStorage);
+    const dailyKeys = keys.filter(k => k.startsWith('guardian_model_'));
+    return Math.max(1, dailyKeys.length);
+  }, [state.routineModel]);
+
+  const currentBin = Math.floor((new Date().getHours() * 60 + new Date().getMinutes()) / 30);
+
+  const expectedNowText = useMemo(() => {
+    if (!state.routineModel.isSeeded) return 'Awaiting calibration...';
+    const dist = getMarginalDist(state.routineModel, currentBin);
+    let maxIdx = 0;
+    let maxVal = -1;
+    for (let i = 0; i < dist.length; i++) {
+      if (dist[i] > maxVal) {
+        maxVal = dist[i];
+        maxIdx = i;
+      }
+    }
+    const cls = EVENT_CLASSES[maxIdx];
+    const icon = EVENT_ICONS[cls] || '❓';
+    return `${icon} ${cls.replace(/_/g, ' ')}`;
+  }, [state.routineModel, currentBin]);
+
+  const expectedNextText = useMemo(() => {
+    if (!state.routineModel.isSeeded) return 'Awaiting calibration...';
+    
+    const nextBin = (currentBin + 1) % 48;
+    const lastEvent = state.recentEvents[state.recentEvents.length - 1];
+    let prevIdx = lastEvent ? EVENT_CLASSES.indexOf(lastEvent.eventClass) : EVENT_CLASSES.indexOf('afternoon_nap_silence');
+    if (prevIdx === -1) prevIdx = EVENT_CLASSES.indexOf('afternoon_nap_silence');
+    
+    let maxTransitionIdx = 0;
+    let maxTransitionCount = -1;
+    for (let curr = 0; curr < 12; curr++) {
+      const count = state.routineModel.counts[nextBin * 12 * 12 + prevIdx * 12 + curr] || 0;
+      if (count > maxTransitionCount) {
+        maxTransitionCount = count;
+        maxTransitionIdx = curr;
+      }
+    }
+    
+    const cls = EVENT_CLASSES[maxTransitionIdx];
+    const icon = EVENT_ICONS[cls] || '❓';
+    return `${icon} ${cls.replace(/_/g, ' ')}`;
+  }, [state.routineModel, state.recentEvents, currentBin]);
 
   const getRelativeTime = (ts: number) => {
     const diffSec = Math.floor((Date.now() - ts) / 1000);
@@ -63,7 +112,7 @@ export function MonitorDashboard({
     <div className="space-y-6">
       
       {/* Top row — status bar */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-4 shadow-md">
+      <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-4 shadow-md print:hidden">
         <div className="flex flex-wrap items-center gap-3">
           {/* Pulsing indicator */}
           <div className="relative flex h-3 w-3 shrink-0">
@@ -112,7 +161,7 @@ export function MonitorDashboard({
       </div>
 
       {/* Second row — three stat cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-4 print:hidden">
         {/* Card 1 */}
         <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-4 text-center space-y-1">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 block">Classified Today</span>
@@ -136,14 +185,57 @@ export function MonitorDashboard({
         </div>
       </div>
 
+      {/* Cognitive Routine Insights Card */}
+      <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-xl p-5 shadow-xl space-y-4 print:hidden">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-teal-400 flex items-center gap-1.5 border-b border-slate-800/40 pb-2">
+          🤖 Live Cognitive Routine Insights
+        </h3>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+          <div className="bg-slate-900/50 border border-slate-850 p-3.5 rounded-xl space-y-1">
+            <span className="text-[10px] text-slate-500 uppercase font-semibold">Temporal Span</span>
+            <div className="text-base font-bold text-slate-200 font-mono">
+              {daysOfData} {daysOfData === 1 ? 'Day' : 'Days'}
+            </div>
+            <p className="text-[9px] text-slate-550 leading-none">Baseline snapshots on disk</p>
+          </div>
+
+          <div className="bg-slate-900/50 border border-slate-850 p-3.5 rounded-xl space-y-1">
+            <span className="text-[10px] text-slate-500 uppercase font-semibold">Total Transitions</span>
+            <div className="text-base font-bold text-slate-200 font-mono">
+              {state.routineModel.totalObservations}
+            </div>
+            <p className="text-[9px] text-slate-555 leading-none font-medium">Logged Markov count steps</p>
+          </div>
+
+          <div className="bg-slate-900/50 border border-slate-850 p-3.5 rounded-xl space-y-1">
+            <span className="text-[10px] text-slate-500 uppercase font-semibold">Expected Behavior Now</span>
+            <div className="text-sm font-bold text-slate-200 truncate capitalize">
+              {expectedNowText}
+            </div>
+            <p className="text-[9px] text-slate-550 leading-none">Peak marginal probability</p>
+          </div>
+
+          <div className="bg-slate-900/50 border border-slate-850 p-3.5 rounded-xl space-y-1 border-l-2 border-l-teal-500/30">
+            <span className="text-[10px] text-teal-450 uppercase font-bold text-teal-400">Guardian Expects (Next 30m)</span>
+            <div className="text-sm font-bold text-teal-400 truncate capitalize">
+              {expectedNextText}
+            </div>
+            <p className="text-[9px] text-slate-555 leading-none font-medium">Markov transition prediction</p>
+          </div>
+        </div>
+      </div>
+
       {/* Alerts Panel */}
-      <AlertPanel alerts={state.alerts} acknowledgeAlert={acknowledgeAlert} />
+      <div className="print:hidden">
+        <AlertPanel alerts={state.alerts} acknowledgeAlert={acknowledgeAlert} />
+      </div>
 
       {/* Alert History Timeline (Incident Medical Record Ledger) */}
       <AlertHistoryTimeline alerts={state.alerts} />
 
       {/* Events Ticker */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl space-y-3.5">
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl space-y-3.5 print:hidden">
         <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-1.5 border-b border-slate-800 pb-2.5">
           📊 Real-Time Ambient Acoustic Feed
         </h3>
@@ -193,7 +285,9 @@ export function MonitorDashboard({
       </div>
 
       {/* Routine Heatmap */}
-      <RoutineHeatmap heatmapData={heatmapData} recentEvents={state.recentEvents} />
+      <div className="print:hidden">
+        <RoutineHeatmap heatmapData={heatmapData} recentEvents={state.recentEvents} />
+      </div>
 
     </div>
   );
