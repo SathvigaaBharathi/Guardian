@@ -123,7 +123,7 @@ export default function App() {
             🔑 Code: <span className="text-teal-400 select-all font-extrabold">{guardian.pairingCode}</span>
           </span>
           <a
-            href={`#family?code=${guardian.pairingCode}`}
+            href="#family"
             className="text-xs text-teal-400 hover:text-teal-300 underline font-medium"
             target="_blank"
             rel="noreferrer"

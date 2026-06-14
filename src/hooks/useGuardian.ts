@@ -132,14 +132,9 @@ export function useGuardian() {
   const lastEventRef = useRef<AudioEvent | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
-  // Load or generate pairing code (cached in localStorage)
+  // Generate a new pairing code dynamically on every mount/load
   const pairingCode = useMemo(() => {
-    let code = localStorage.getItem('guardian_pairing_code');
-    if (!code) {
-      code = Math.random().toString(36).substring(2, 8).toUpperCase();
-      localStorage.setItem('guardian_pairing_code', code);
-    }
-    return code;
+    return Math.random().toString(36).substring(2, 8).toUpperCase();
   }, []);
 
   // Connect to local WebSocket for cross-device synchronization
